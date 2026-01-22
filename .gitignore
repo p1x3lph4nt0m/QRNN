@@ -1,6 +1,0 @@
-.venv/
-.QML_for_Time_Series/
-*.zip
-*.pdf
-standard.py
-test.py
