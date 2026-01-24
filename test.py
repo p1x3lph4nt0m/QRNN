@@ -137,7 +137,7 @@ class QRNNModel(Module):
             param = np.array(self.pqc.parameters())[0].reshape((-1, 1)).squeeze()
             self.Amplitude = Amplitude_Cacu(input, param)
         log("Forward pass completed")
-        return x
+        return tensor.unsqueeze(x, 0)
 
 def train(data):
     log("Preparing training data")
@@ -154,7 +154,8 @@ def train(data):
         loss = 0
         count = 0
         for step, (data, true) in enumerate(get_minibatch_data(x_train, y_train, batch_size)):
-            data, true = QTensor(data), QTensor(true)
+            data = QTensor(data.astype(np.float32))
+            true = QTensor(true.astype(np.float32)).reshape([1,1])
             optimizer.zero_grad()
             output = QRNNModel(data)
             losss = MseLoss(true, output)
@@ -165,7 +166,7 @@ def train(data):
             if step % 20 == 0:
                 log(f"Step {step}, Loss {losss.item():.6f}")
         log(f"Epoch {ep+1} completed. Avg Loss {loss/count:.6f}")
-    return np.array(QRNNModel.pqc.parameters())[0].reshape((-1,1)).to_numpy().squeeze()
+    return np.array(QRNNModel.pqc.parameters())[0].reshape((-1,1)).squeeze()
 
 def Accuarcy(params, zhibiao, n):
     log(f"Evaluating {zhibiao}")
