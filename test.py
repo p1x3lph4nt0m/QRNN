@@ -166,7 +166,10 @@ def train(data):
             if step % 20 == 0:
                 log(f"Step {step}, Loss {losss.item():.6f}")
         log(f"Epoch {ep+1} completed. Avg Loss {loss/count:.6f}")
-    return np.array(QRNNModel.pqc.parameters())[0].reshape((-1,1)).squeeze()
+        raw_params = QRNNModel.pqc.parameters()[0].reshape((-1,))
+        Param = np.array([scalar(p) for p in raw_params], dtype=np.float32)
+
+    return Param
 
 def Accuarcy(params, zhibiao, n):
     log(f"Evaluating {zhibiao}")
@@ -184,7 +187,7 @@ def Accuarcy(params, zhibiao, n):
         X_t_max = max(X_t_cha[:n])
         X_t_cha = (X_t_cha - X_t_min) / (X_t_max - X_t_min)
         xin = X_t_cha[:-1].reshape(1,-1)
-        Y_prediction = QRNNModel(xin)
+        Y_prediction = scalar(QRNNModel(xin))
         Y_prediction = Y_prediction*(X_t_max-X_t_min)+X_t_min
         Y_prediction = X_t[n] + scalar(Y_prediction)
         Ei = 0 if X_t[n]==0 else m.fabs(X_t[n]-Y_prediction)/X_t[n]
@@ -218,6 +221,7 @@ if __name__ == '__main__':
         param = train(data)
         acc = Accuarcy(param, name, 16)
         print(f"{name} accuracy: {acc}")
-        np.savetxt(f"./QRNN_best_params/{name}.txt", param)
+        safe_name = name.replace(" ", "_")
+        np.savetxt(f"./best_params/{safe_name}.txt", param)
 
     log(f"Total runtime: {time.time()-start:.2f} seconds")
