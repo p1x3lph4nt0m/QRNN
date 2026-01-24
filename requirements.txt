@@ -1,0 +1,16 @@
+To run this code segment you need to have a Python environment with the following requirements installed:
+```
+python==3.9
+numpy
+pandas
+matplotlib
+scipy
+tqdm
+pyqpanda
+pyvqnet
+qiskit
+openblas
+llvm
+cmake
+xcode command line tools
+```
