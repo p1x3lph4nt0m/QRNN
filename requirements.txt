@@ -1,6 +1,6 @@
 To run this code segment you need to have a Python environment with the following requirements installed:
 ```
-python==3.9
+python==3.9 or 3.8
 numpy
 pandas
 matplotlib
