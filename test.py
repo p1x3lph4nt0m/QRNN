@@ -170,7 +170,7 @@ def train(data):
 
 def Accuarcy(params, zhibiao, n):
     log(f"Evaluating {zhibiao}")
-    test_data = pd.read_csv("Test.csv")
+    test_data = pd.read_csv("datasets/test_weather.csv")
     Data = list(test_data.loc[:, zhibiao])
     Data_cha = [Data[i+1]-Data[i] for i in range(len(Data)-1)]
     test_iterations = len(Data)-n-1
@@ -186,7 +186,7 @@ def Accuarcy(params, zhibiao, n):
         xin = X_t_cha[:-1].reshape(1,-1)
         Y_prediction = QRNNModel(xin)
         Y_prediction = Y_prediction*(X_t_max-X_t_min)+X_t_min
-        Y_prediction = (X_t[n]+Y_prediction).item()
+        Y_prediction = X_t[n] + scalar(Y_prediction)
         Ei = 0 if X_t[n]==0 else m.fabs(X_t[n]-Y_prediction)/X_t[n]
         Ei_2_sum += Ei*Ei
     accuarcy = 1 - m.sqrt(Ei_2_sum/test_iterations)
