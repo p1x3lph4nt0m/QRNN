@@ -247,7 +247,7 @@ def Accuarcy(params, zhibiao, n):
 
 
 if __name__ == '__main__':
-    df = pd.read_csv("Train.csv")
+    df = pd.read_csv("datasets/Train_weather.csv")
     data_P = list(df.loc[:, 'Atmospheric Pressure'])
     data_Tmin = list(df.loc[:, 'Minimum Temperature'])
     data_Tmax = list(df.loc[:, 'Maximum Temperature'])
