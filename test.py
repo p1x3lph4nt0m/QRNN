@@ -14,6 +14,9 @@ from pyvqnet.tensor import QTensor
 
 start = time.time()
 
+def scalar(x):
+    return float(x.item()) if hasattr(x, "item") else float(x)
+
 def log(msg):
     now = datetime.now().strftime("%H:%M:%S")
     print(f"[{now}] {msg}")
@@ -31,25 +34,25 @@ def U_in(qubits, X_t):
 def U_theta(qubits, params):
     circuit = create_empty_circuit()
     for i in range(6):
-        circuit << RX(qubits[i], float(params[3 * i]).item()) \
-                << RZ(qubits[i], float(params[3 * i + 1]).item()) \
-                << RX(qubits[i], float(params[3 * i + 2]).item())
+        circuit << RX(qubits[i], scalar(params[3 * i])) \
+                << RZ(qubits[i], scalar(params[3 * i + 1])) \
+                << RX(qubits[i], scalar(params[3 * i + 2]))
     return circuit
 
 def H_X(qubits, params):
     circuit = create_empty_circuit()
     for i in range(6):
-        circuit << RX(qubits[i], float(params[i]).item())
+        circuit << RX(qubits[i], scalar(params[i]))
     return circuit
 
 def H_ZZ(qubits, params):
     circuit = create_empty_circuit()
     for i in range(5):
         circuit << CNOT(qubits[i], qubits[i + 1]) \
-                << RZ(qubits[i + 1], float(params[i]).item()) \
+                << RZ(qubits[i + 1], scalar(params[i])) \
                 << CNOT(qubits[i], qubits[i + 1])
     circuit << CNOT(qubits[5], qubits[0]) \
-            << RZ(qubits[0], float(params[5]).item()) \
+            << RZ(qubits[0], scalar(params[5])) \
             << CNOT(qubits[5], qubits[0])
     return circuit
 
