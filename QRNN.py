@@ -12,10 +12,10 @@ from pyvqnet.tensor import QTensor
 
 start = time.time() 
 
-'''Step1 量子线路定义'''
+'''Quantum Circuit Definition'''
 
 
-# 数据输入U_in矩阵
+# Data input U_in matrix
 def U_in(qubits, X_t):
     circuit = create_empty_circuit()
     theta_in = m.acos(X_t.item())
@@ -25,7 +25,7 @@ def U_in(qubits, X_t):
     return circuit
 
 
-# 参数矩阵，有3*6=18个参数
+# Parameter matrix, 3*6 = 18 parameters
 def U_theta(qubits, params):
     circuit = create_empty_circuit()
     for i in range(6):
@@ -35,7 +35,7 @@ def U_theta(qubits, params):
     return circuit
 
 
-# 哈密顿量模拟第一部分，有6个参数
+# First part of Hamiltonian simulation, 6 parameters
 def H_X(qubits, params):
     circuit = create_empty_circuit()
     for i in range(6):
@@ -43,7 +43,7 @@ def H_X(qubits, params):
     return circuit
 
 
-# 哈密顿量模拟第二部分，有6个参数
+# Second part of Hamiltonian simulation, 6 parameters
 def H_ZZ(qubits, params):
     circuit = create_empty_circuit()
     for i in range(5):
@@ -56,7 +56,7 @@ def H_ZZ(qubits, params):
     return circuit
 
 
-# 整个参数线路，共18+6+6=30个参数
+# Full parameterized circuit, total 18+6+6 = 30 parameters
 def QRNN_VQC(qubits, params):
     params1 = params[0: 18]
     params2 = params[18: 18 + 6]
@@ -68,14 +68,14 @@ def QRNN_VQC(qubits, params):
     return circuit
 
 
-# 批量读取数据
+# Batch data loader
 def get_minibatch_data(x_data, true, batch_size):
     for i in range(0, x_data.shape[0] - batch_size + 1, batch_size):
         idxs = slice(i, i + batch_size)
         yield x_data[idxs], true[idxs]  # yeild  类似于return，返回后交出CPU使用权
 
 
-# 搭建完整的量子线路
+# Build the complete quantum circuit
 def QCircuit(input, weights, qlist, clist, machine):
     Amplitude = input[0:-1]
     x = input[-1]
@@ -93,17 +93,18 @@ def QCircuit(input, weights, qlist, clist, machine):
     return prob
 
 
-# 定义振幅计算函数，振幅本身不属于线路优化参数，只是用于不同时间步的传值
+# Amplitude calculation function. Amplitudes are not optimized parameters,
+# they are only used to pass values between time steps
 def Amplitude_Cacu(input, params):
     params = params.squeeze()
     Amplitude = input[0][0:-1]
     x = input[0][-1]
-    qvm = CPUQVM()  # 建立一个局部的量子虚拟机
-    qvm.init_qvm()  # 初始化量子虚拟机
+    qvm = CPUQVM()  # Create a local quantum virtual machine
+    qvm.init_qvm()  # Initialize the quantum virtual machine
     qubits = qvm.qAlloc_many(6)
     prog = QProg()
     circuit = create_empty_circuit()
-    circuit << U_in(qubits, x)  # 数据输入
+    circuit << U_in(qubits, x)   # Data input
     circuit << amplitude_encode([qubits[3], qubits[4], qubits[5]], Amplitude.to_numpy(), bool=False)  # 后三个比特的编码
     circuit << QRNN_VQC(qubits, params[0: 30])
     prog << circuit
@@ -112,24 +113,25 @@ def Amplitude_Cacu(input, params):
     qubit2_prob = qvm.prob_run_list(prog, qubits[2], -1)
     Amplitude_2 = qvm.prob_run_list(prog, [qubits[3], qubits[4], qubits[5]], -1)
     Amplitude = np.sqrt(np.array(Amplitude_2))
-    qvm.finalize()  # 释放局部虚拟机
+    qvm.finalize()  # Release local virtual machine
     return Amplitude
 
 
 '''Step2 定义一个继承于Module的机器学习模型类'''
-param_num = 30  # 待训练参数个数
-qbit_num = 6  # 量子计算模块量子比特数
+param_num = 30  # Number of trainable parameters
+qbit_num = 6  # Number of qubits in the quantum module
+
 
 
 class QRNNModel(Module):
     def __init__(self):
         super(QRNNModel, self).__init__()
-        # 使用QuantumLayer类，可以把带训练参数的量子线路纳入VQNet的自动微分的训练流程中
+        # QuantumLayer allows the parameterized quantum circuit to be trained with auto-differentiation
         self.pqc = QuantumLayer(QCircuit, param_num, "cpu", qbit_num)
-        # 实例化时，初始化振幅的值
+       # Initialize amplitude values
         self.Amplitude = np.array([1, 0, 0, 0, 0, 0, 0, 0])
 
-    # 定义模型前向函数
+    # Define forward pass
     def forward(self, X_t):
         xin = X_t[0]
         x_min = tensor.min(xin)
