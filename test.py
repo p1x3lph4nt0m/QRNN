@@ -13,6 +13,30 @@ from pyvqnet.tensor import tensor
 from pyvqnet.tensor import QTensor
 
 start = time.time()
+param_num = int()
+qbit_num = int()
+epoch = int()
+n = int()
+batch_size = int()
+weight_log_interval = int()
+df = pd.read_csv("datasets/train_weather.csv")
+data_list = {
+    'Atmospheric Pressure': list(df.loc[:, 'Atmospheric Pressure']),
+    'Minimum Temperature': list(df.loc[:, 'Minimum Temperature']),
+    'Maximum Temperature': list(df.loc[:, 'Maximum Temperature']),
+    'Relative Humidity': list(df.loc[:, 'Relative Humidity']),
+    'Wind Speed': list(df.loc[:, 'Wind Speed'])
+}
+
+def tweakable_parameters():
+    global param_num, qbit_num, epoch, n, batch_size, weight_log_interval
+    param_num = 30
+    qbit_num = 6
+    epoch = 100
+    n = 16
+    batch_size = 1
+    weight_log_interval = 10
+tweakable_parameters()
 
 def scalar(x):
     return float(x.item()) if hasattr(x, "item") else float(x)
@@ -111,9 +135,6 @@ def Amplitude_Cacu(input, params):
     qvm.finalize()
     return np.sqrt(np.array(Amplitude_2), dtype=np.float32)
 
-param_num = 30
-qbit_num = 6
-
 class QRNNModel(Module):
     def __init__(self):
         super(QRNNModel, self).__init__()
@@ -142,59 +163,100 @@ class QRNNModel(Module):
 def train(data):
     log("Preparing training data")
     data_P_cha = [data[i+1] - data[i] for i in range(len(data)-1)]
-    n = 16
-    x_train = np.array([data_P_cha[i:i+n] for i in range(len(data_P_cha)-n)]).reshape(-1,16)
+
+    x_train = np.array([data_P_cha[i:i+n] for i in range(len(data_P_cha)-n)]).reshape(-1,n)
     y_train = np.array([data_P_cha[i+n] for i in range(len(data_P_cha)-n)])
+
     log(f"Training samples: {len(x_train)}")
-    batch_size = 1
-    epoch = 1
+
     for ep in range(epoch):
         log(f"Epoch {ep+1} started")
         QRNNModel.train()
         loss = 0
         count = 0
+
         for step, (data, true) in enumerate(get_minibatch_data(x_train, y_train, batch_size)):
             data = QTensor(data.astype(np.float32))
             true = QTensor(true.astype(np.float32)).reshape([1,1])
+
             optimizer.zero_grad()
             output = QRNNModel(data)
             losss = MseLoss(true, output)
             losss.backward()
             optimizer._step()
+
             loss += losss.item()
             count += batch_size
-            if step % 20 == 0:
-                log(f"Step {step}, Loss {losss.item():.6f}")
+
         log(f"Epoch {ep+1} completed. Avg Loss {loss/count:.6f}")
-        raw_params = QRNNModel.pqc.parameters()[0].reshape((-1,))
-        Param = np.array([scalar(p) for p in raw_params], dtype=np.float32)
+
+        if (ep+1) % weight_log_interval == 0:
+            raw_params = QRNNModel.pqc.parameters()[0].reshape((-1,))
+            Param = np.array([scalar(p) for p in raw_params], dtype=np.float32)
+            print(f"--- Weights at epoch {ep+1} ---")
+            print(Param)
+
+    raw_params = QRNNModel.pqc.parameters()[0].reshape((-1,))
+    Param = np.array([scalar(p) for p in raw_params], dtype=np.float32)
 
     return Param
 
-def Accuarcy(params, zhibiao, n):
-    log(f"Evaluating {zhibiao}")
+
+# def Accuarcy(params, zhibiao, n):
+#     log(f"Evaluating {zhibiao}")
+#     test_data = pd.read_csv("datasets/test_weather.csv")
+#     Data = list(test_data.loc[:, zhibiao])
+#     Data_cha = [Data[i+1]-Data[i] for i in range(len(Data)-1)]
+#     test_iterations = len(Data)-n-1
+#     Ei_2_sum = 0
+#     for j in range(test_iterations):
+#         if j % 20 == 0:
+#             log(f"Testing step {j}/{test_iterations}")
+#         X_t_cha = np.array(Data_cha[j:j+n+1])
+#         X_t = np.array(Data[j:j+n+2])
+#         X_t_min = min(X_t_cha[:n])
+#         X_t_max = max(X_t_cha[:n])
+#         X_t_cha = (X_t_cha - X_t_min) / (X_t_max - X_t_min)
+#         xin = X_t_cha[:-1].reshape(1,-1)
+#         Y_prediction = scalar(QRNNModel(xin))
+#         Y_prediction = Y_prediction*(X_t_max-X_t_min)+X_t_min
+#         Y_prediction = X_t[n] + scalar(Y_prediction)
+#         Ei = 0 if X_t[n]==0 else m.fabs(X_t[n]-Y_prediction)/X_t[n]
+#         Ei_2_sum += Ei*Ei
+#     accuarcy = 1 - m.sqrt(Ei_2_sum/test_iterations)
+#     log(f"Accuracy for {zhibiao}: {accuarcy:.4f}")
+#     return accuarcy
+
+def dump_predictions(params, zhibiao):
+    log(f"Generating predictions for {zhibiao}")
+
     test_data = pd.read_csv("datasets/test_weather.csv")
     Data = list(test_data.loc[:, zhibiao])
     Data_cha = [Data[i+1]-Data[i] for i in range(len(Data)-1)]
-    test_iterations = len(Data)-n-1
-    Ei_2_sum = 0
-    for j in range(test_iterations):
-        if j % 20 == 0:
-            log(f"Testing step {j}/{test_iterations}")
+
+    predictions = []
+
+    for j in range(len(Data)-n-1):
         X_t_cha = np.array(Data_cha[j:j+n+1])
         X_t = np.array(Data[j:j+n+2])
+
         X_t_min = min(X_t_cha[:n])
         X_t_max = max(X_t_cha[:n])
+
         X_t_cha = (X_t_cha - X_t_min) / (X_t_max - X_t_min)
         xin = X_t_cha[:-1].reshape(1,-1)
+
         Y_prediction = scalar(QRNNModel(xin))
         Y_prediction = Y_prediction*(X_t_max-X_t_min)+X_t_min
         Y_prediction = X_t[n] + scalar(Y_prediction)
-        Ei = 0 if X_t[n]==0 else m.fabs(X_t[n]-Y_prediction)/X_t[n]
-        Ei_2_sum += Ei*Ei
-    accuarcy = 1 - m.sqrt(Ei_2_sum/test_iterations)
-    log(f"Accuracy for {zhibiao}: {accuarcy:.4f}")
-    return accuarcy
+
+        predictions.append(Y_prediction)
+
+    os.makedirs("predictions", exist_ok=True)
+    safe_name = zhibiao.replace(" ", "_")
+    np.savetxt(f"predictions/{safe_name}_predictions.txt", predictions)
+    log(f"Predictions saved for {zhibiao}")
+
 
 if __name__ == '__main__':
     # script_name = os.path.basename(__file__)
@@ -202,16 +264,7 @@ if __name__ == '__main__':
     # os.system(f"cp {script_name} {backup_name}")
     # log(f"Script backed up as {backup_name}")
     log("Program started")
-
-    df = pd.read_csv("datasets/train_weather.csv")
-    data_list = {
-        'Atmospheric Pressure': list(df.loc[:, 'Atmospheric Pressure']),
-        'Minimum Temperature': list(df.loc[:, 'Minimum Temperature']),
-        'Maximum Temperature': list(df.loc[:, 'Maximum Temperature']),
-        'Relative Humidity': list(df.loc[:, 'Relative Humidity']),
-        'Wind Speed': list(df.loc[:, 'Wind Speed'])
-    }
-
+    
     QRNNModel = QRNNModel()
     optimizer = adam.Adam(QRNNModel.parameters(), lr=0.005)
     MseLoss = MeanSquaredError()
@@ -219,9 +272,9 @@ if __name__ == '__main__':
     for name, data in data_list.items():
         log(f"Training {name}")
         param = train(data)
-        acc = Accuarcy(param, name, 16)
-        print(f"{name} accuracy: {acc}")
+        dump_predictions(param, name)
         safe_name = name.replace(" ", "_")
         np.savetxt(f"./best_params/{safe_name}.txt", param)
+        log(f"Parameters saved for {name}")
 
     log(f"Total runtime: {time.time()-start:.2f} seconds")
