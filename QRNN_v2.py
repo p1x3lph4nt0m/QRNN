@@ -32,10 +32,10 @@ def tweakable_parameters():
     global param_num, qbit_num, epoch, n, batch_size, weight_log_interval
     param_num = 30
     qbit_num = 6
-    epoch = 100
+    epoch = 3  # Reduced from 100 for testing
     n = 16
     batch_size = 1
-    weight_log_interval = 10
+    weight_log_interval = 1  # Log every epoch for visibility
 tweakable_parameters()
 
 def scalar(x):
@@ -276,5 +276,7 @@ if __name__ == '__main__':
         safe_name = name.replace(" ", "_")
         np.savetxt(f"./best_params/{safe_name}.txt", param)
         log(f"Parameters saved for {name}")
+        log(f"✓ {name} COMPLETE - files written to ./predictions/ and ./best_params/")
 
     log(f"Total runtime: {time.time()-start:.2f} seconds")
+    log("✓ PROGRAM FINISHED - All models trained and files saved")
