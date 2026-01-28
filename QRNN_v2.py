@@ -32,10 +32,10 @@ def tweakable_parameters():
     global param_num, qbit_num, epoch, n, batch_size, weight_log_interval
     param_num = 30
     qbit_num = 6
-    epoch = 3  # Reduced from 100 for testing
+    epoch = 100  # Reduced from 100 for testing
     n = 7
-    batch_size = 1
-    weight_log_interval = 1  # Log every epoch for visibility
+    batch_size = 2
+    weight_log_interval = 10  # Log every epoch for visibility
 tweakable_parameters()
 
 def scalar(x):
@@ -143,22 +143,55 @@ class QRNNModel(Module):
 
     def forward(self, X_t):
         log("Forward pass started")
-        xin = X_t[0]
-        x_min = tensor.min(xin)
-        x_max = tensor.max(xin)
-        xin = (xin - x_min) / (x_max - x_min)
-        for i in range(X_t.shape[1]):
-            log(f"Time step {i+1}/{X_t.shape[1]}")
-            amp_tensor = QTensor(self.Amplitude.astype(np.float32))
-            x_step = QTensor(xin[i].to_numpy().astype(np.float32))
-            input = tensor.concatenate([amp_tensor, x_step], 0)
-            # input = tensor.concatenate([QTensor(self.Amplitude), xin[i]], 0)
-            input = tensor.unsqueeze(input)
-            x = self.pqc(input)[0][1]
-            param = np.array(self.pqc.parameters())[0].reshape((-1, 1)).squeeze()
-            self.Amplitude = Amplitude_Cacu(input, param)
+
+        batch_size, T = X_t.shape
+
+        # per-batch normalization (same as first code)
+        x_min = tensor.min(X_t, axis=1)
+        x_max = tensor.max(X_t, axis=1)
+
+        # reshape manually to keep dims
+        x_min = tensor.unsqueeze(x_min, axis=1)
+        x_max = tensor.unsqueeze(x_max, axis=1)
+
+        X_t = (X_t - x_min) / (x_max - x_min + 1e-8)
+
+        # one amplitude per batch element
+        Amplitude = [
+            QTensor(self.Amplitude.astype(np.float32))
+            for _ in range(batch_size)
+        ]
+
+        outputs = []
+
+        for t in range(T):
+            log(f"Time step {t+1}/{T}")
+            step_outputs = []
+
+            for b in range(batch_size):
+                x_step = QTensor(
+                    X_t[b, t].reshape([1]).to_numpy().astype(np.float32)
+                )
+
+                inp = tensor.concatenate([Amplitude[b], x_step], 0)
+                inp = tensor.unsqueeze(inp)
+
+                out = self.pqc(inp)
+                y = out[0][1]
+                step_outputs.append(y)
+
+                param = np.array(self.pqc.parameters())[0].reshape((-1,)).squeeze()
+
+                amp_new = Amplitude_Cacu(inp, param)
+
+                Amplitude[b] = QTensor(np.asarray(amp_new, dtype=np.float32))
+
+
+            outputs = step_outputs 
+
         log("Forward pass completed")
-        return tensor.unsqueeze(x, 0)
+        return tensor.stack(outputs).reshape([batch_size, 1])
+
 
 def train(data):
     log("Preparing training data")
@@ -177,7 +210,7 @@ def train(data):
 
         for step, (data, true) in enumerate(get_minibatch_data(x_train, y_train, batch_size)):
             data = QTensor(data.astype(np.float32))
-            true = QTensor(true.astype(np.float32)).reshape([1,1])
+            true = QTensor(true.astype(np.float32)).reshape([batch_size,1])
 
             optimizer.zero_grad()
             output = QRNNModel(data)
@@ -279,4 +312,4 @@ if __name__ == '__main__':
         log(f"✓ {name} COMPLETE - files written to ./predictions/ and ./best_params/")
 
     log(f"Total runtime: {time.time()-start:.2f} seconds")
-    log("✓ PROGRAM FINISHED - All models trained and files saved")
+    log("PROGRAM FINISHED - All models trained and files saved")
