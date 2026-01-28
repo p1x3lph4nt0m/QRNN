@@ -6,16 +6,13 @@ import numpy as np
 def Accuracy_from_file(zhibiao, true_values, predictions):
     test_iterations = min(len(true_values), len(predictions))
     Ei_2_sum = 0
-
-    if test_iterations <= 0:
-        raise ValueError(f"[{zhibiao}] Not enough samples for n={n}")
-
+    
     for j in range(test_iterations):
         if j % 20 == 0:
             print(f"[{zhibiao}] Testing step {j}/{test_iterations}")
 
-        true_val = true_values[j + n]
-        pred_val = predictions[j + n]
+        true_val = true_values[j]
+        pred_val = predictions[j]
 
         Ei = 0 if true_val == 0 else m.fabs(true_val - pred_val) / true_val
         Ei_2_sum += Ei * Ei
