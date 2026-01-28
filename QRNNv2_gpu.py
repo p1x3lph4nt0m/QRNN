@@ -32,10 +32,10 @@ def tweakable_parameters():
     global param_num, qbit_num, epoch, n, batch_size, weight_log_interval
     param_num = 30
     qbit_num = 6
-    epoch = 3  # Reduced from 100 for testing
+    epoch = 100  # Reduced from 100 for testing
     n = 7
     batch_size = 1
-    weight_log_interval = 1  # Log every epoch for visibility
+    weight_log_interval = 10  # Log every epoch for visibility
 tweakable_parameters()
 
 def scalar(x):
@@ -101,64 +101,125 @@ def QCircuit(input, weights, qlist, clist, machine):
     params = weights.squeeze()
     prog = QProg()
     circuit = create_empty_circuit()
+
     circuit << U_in(qlist, x)
-    qvec = QVec()
-    qvec.append(qlist[3])
-    qvec.append(qlist[4])
-    qvec.append(qlist[5])
-    circuit << amplitude_encode(qvec, Amplitude.tolist(), False)
 
-    # circuit << amplitude_encode([qlist[3], qlist[4], qlist[5]], Amplitude, bool=False)
-    circuit << QRNN_VQC(qlist, params[0:30])
+    qvec = QVec([qlist[3], qlist[4], qlist[5]])
+    circuit << amplitude_encode(qvec, Amplitude, False)
+
+    circuit << QRNN_VQC(qlist, params[:30])
     prog << circuit
-    prob = list(machine.prob_run_dict(prog, qlist[0], -1).values())
-    return prob
 
-def Amplitude_Cacu(input, params):
-    params = params.squeeze()
+    return list(machine.prob_run_dict(prog, qlist[0], -1).values())
+
+
+def Amplitude_Cacu_GPU(qvm, qubits, input, params):
     Amplitude = input[0][0:-1]
     x = input[0][-1]
-    qvm = CPUQVM()
-    qvm.init_qvm()
-    qubits = qvm.qAlloc_many(6)
+
     prog = QProg()
     circuit = create_empty_circuit()
+
     circuit << U_in(qubits, x)
-    qvec = QVec()
-    qvec.append(qubits[3])
-    qvec.append(qubits[4])
-    qvec.append(qubits[5])
-    circuit << amplitude_encode(qvec, Amplitude.to_numpy(), False)
-    circuit << QRNN_VQC(qubits, params[0:30])
+
+    qvec = QVec([qubits[3], qubits[4], qubits[5]])
+    circuit << amplitude_encode(qvec, Amplitude, False)
+
+    circuit << QRNN_VQC(qubits, params[:30])
     prog << circuit
-    Amplitude_2 = qvm.prob_run_list(prog, [qubits[3], qubits[4], qubits[5]], -1)
-    qvm.finalize()
-    return np.sqrt(np.array(Amplitude_2), dtype=np.float32)
+
+    probs = qvm.prob_run_list(prog, qvec, -1)
+    
+    return QTensor(np.sqrt(np.array(probs), dtype=np.float32))
+
 
 class QRNNModel(Module):
     def __init__(self):
         super(QRNNModel, self).__init__()
-        self.pqc = QuantumLayer(QCircuit, param_num, "cpu", qbit_num)
-        self.Amplitude = np.array([1, 0, 0, 0, 0, 0, 0, 0], dtype=np.float32)
+
+        self.pqc = QuantumLayer(QCircuit, param_num, "gpu", qbit_num)
+
+        # Persistent GPU QVM
+        self.qvm = init_quantum_machine(QMachineType.GPU)
+        self.qubits = self.qvm.qAlloc_many(6)
+
+        # Amplitude as QTensor (GPU)
+        self.Amplitude = QTensor(
+            np.array([1,0,0,0,0,0,0,0], dtype=np.float32)
+        )
 
     def forward(self, X_t):
-        log("Forward pass started")
-        xin = X_t[0]
-        x_min = tensor.min(xin)
-        x_max = tensor.max(xin)
-        xin = (xin - x_min) / (x_max - x_min)
-        for i in range(X_t.shape[1]):
-            log(f"Time step {i+1}/{X_t.shape[1]}")
-            amp_tensor = QTensor(self.Amplitude.astype(np.float32))
-            x_step = QTensor(xin[i].to_numpy().astype(np.float32))
-            input = tensor.concatenate([amp_tensor, x_step], 0)
-            # input = tensor.concatenate([QTensor(self.Amplitude), xin[i]], 0)
-            input = tensor.unsqueeze(input)
-            x = self.pqc(input)[0][1]
-            param = np.array(self.pqc.parameters())[0].reshape((-1, 1)).squeeze()
-            self.Amplitude = Amplitude_Cacu(input, param)
-        log("Forward pass completed")
-        return tensor.unsqueeze(x, 0)
+        """
+        X_t shape: (batch_size, n)
+        """
+        batch_size, T = X_t.shape
+
+        x_min = tensor.min(X_t, dim=1, keepdim=True)
+        x_max = tensor.max(X_t, dim=1, keepdim=True)
+        X_t = (X_t - x_min) / (x_max - x_min + 1e-8)
+
+        # Initialize amplitudes: one per batch element
+        Amplitude = [
+        QTensor(np.array([1,0,0,0,0,0,0,0], dtype=np.float32))
+        for _ in range(batch_size)
+        ]
+
+        outputs = []
+
+        for t in range(T):
+            step_outputs = []
+
+            for b in range(batch_size):
+                x_step = X_t[b, t].reshape([1])
+                inp = tensor.concatenate([Amplitude[b], x_step], 0)
+                inp = tensor.unsqueeze(inp)
+
+                out = self.pqc(inp)
+                y = out[0][1]
+                step_outputs.append(y)
+
+                params = self.pqc.parameters()[0]
+                Amplitude[b] = Amplitude_Cacu_GPU(
+                    self.qvm, self.qubits, inp, params
+                )
+            outputs = step_outputs  # last time step only
+
+        return tensor.stack(outputs).reshape([batch_size, 1])
+
+    # def forward(self, X_t):
+    #     xin = X_t[0]
+
+    #     x_min = tensor.min(xin)
+    #     x_max = tensor.max(xin)
+    #     xin = (xin - x_min) / (x_max - x_min + 1e-8)
+
+    #     for i in range(X_t.shape[1]):
+    #         amp = self.Amplitude
+    #         x_step = xin[i].reshape([1])
+
+    #         input = tensor.concatenate([amp, x_step], 0)
+    #         input = tensor.unsqueeze(input)
+
+    #         out = self.pqc(input)
+    #         x = out[0][1]
+
+    #         params = self.pqc.parameters()[0]
+
+    #         self.Amplitude = Amplitude_Cacu_GPU(
+    #             self.qvm,
+    #             self.qubits,
+    #             input,
+    #             params
+    #         )
+
+    #     return tensor.unsqueeze(x, 0)
+
+    def __del__(self):
+        try:
+            self.qvm.finalize()
+        except:
+            pass
+
 
 def train(data):
     log("Preparing training data")
@@ -177,7 +238,7 @@ def train(data):
 
         for step, (data, true) in enumerate(get_minibatch_data(x_train, y_train, batch_size)):
             data = QTensor(data.astype(np.float32))
-            true = QTensor(true.astype(np.float32)).reshape([1,1])
+            true = QTensor(true.astype(np.float32)).reshape([batch_size,1])
 
             optimizer.zero_grad()
             output = QRNNModel(data)
