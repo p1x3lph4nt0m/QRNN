@@ -3,8 +3,8 @@ import pandas as pd
 import numpy as np
 
 
-def Accuracy_from_file(zhibiao, true_values, predictions, n):
-    test_iterations = min(len(true_values), len(predictions)) - n - 1
+def Accuracy_from_file(zhibiao, true_values, predictions):
+    test_iterations = min(len(true_values), len(predictions))
     Ei_2_sum = 0
 
     if test_iterations <= 0:
@@ -65,7 +65,6 @@ if __name__ == '__main__':
             zhibiao=col,
             true_values=true_values,
             predictions=predictions,
-            n=n
         )
 
         print(f"{col} accuracy: {acc:.4f}\n")
