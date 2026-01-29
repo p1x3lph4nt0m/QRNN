@@ -2,33 +2,40 @@ import math as m
 import pandas as pd
 import numpy as np
 
+def Accuracy_from_file_match_func1(zhibiao, raw_data, raw_predictions, n):
+    """
+    Reproduces the EXACT metric used inside Function 1
+    Assumes prediction file contains RAW forecasts (x_{t+1})
+    """
 
-def Accuracy_from_file(zhibiao, true_values, predictions):
-    test_iterations = min(len(true_values), len(predictions))
+    Data = raw_data
+    test_iterations = min(len(raw_predictions) - n, len(Data) - n - 1)
     Ei_2_sum = 0
-    
+
     for j in range(test_iterations):
+
         if j % 20 == 0:
             print(f"[{zhibiao}] Testing step {j}/{test_iterations}")
 
-        true_val = true_values[j]
-        pred_val = predictions[j]
+        X_t = np.array(Data[j:j+n+2]) 
 
-        Ei = 0 if true_val == 0 else m.fabs(true_val - pred_val) / true_val
+        prev_value = X_t[n]            
+        Y_prediction = raw_predictions[j+n] 
+
+        Ei = 0 if prev_value == 0 else m.fabs(prev_value - Y_prediction) / prev_value
         Ei_2_sum += Ei * Ei
 
     accuracy = 1 - m.sqrt(Ei_2_sum / test_iterations)
     print(f"Accuracy for {zhibiao}: {accuracy:.4f}")
-
     return accuracy
 
-
 def load_predictions_from_txt(filepath):
-    """Load one prediction per line."""
     return np.loadtxt(filepath)
 
-
 if __name__ == '__main__':
+
+    n = 16  # must match model
+
     test_df = pd.read_csv("datasets/test_weather.csv")
 
     prediction_files = [
@@ -40,11 +47,6 @@ if __name__ == '__main__':
     ]
 
     test_columns = test_df.columns.tolist()[1:]
-
-    if len(prediction_files) != len(test_columns):
-        raise ValueError("Number of prediction files must match number of test columns")
-
-    # Map column → file
     column_to_file = dict(zip(test_columns, prediction_files))
 
     for col in test_columns:
@@ -56,12 +58,13 @@ if __name__ == '__main__':
             print(f"Skipping {col}: cannot read {pred_file} ({e})")
             continue
 
-        true_values = test_df[col].values
+        raw_values = test_df[col].values
 
-        acc = Accuracy_from_file(
+        acc = Accuracy_from_file_match_func1(
             zhibiao=col,
-            true_values=true_values,
-            predictions=predictions,
+            raw_data=raw_values,
+            raw_predictions=predictions,
+            n=n
         )
 
         print(f"{col} accuracy: {acc:.4f}\n")
