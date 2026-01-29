@@ -34,7 +34,7 @@ def tweakable_parameters():
     qbit_num = 6
     epoch = 100  # Reduced from 100 for testing
     n = 7
-    batch_size = 2
+    batch_size = 1
     weight_log_interval = 10  # Log every epoch for visibility
 tweakable_parameters()
 
