@@ -9,7 +9,7 @@ def Accuracy_from_file_match_func1(zhibiao, raw_data, raw_predictions, n):
     """
 
     Data = raw_data
-    test_iterations = min(len(raw_predictions) - n, len(Data) - n - 1)
+    test_iterations = len(Data) - n - 1
     Ei_2_sum = 0
 
     for j in range(test_iterations):
