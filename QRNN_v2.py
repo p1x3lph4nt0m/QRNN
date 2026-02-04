@@ -17,7 +17,6 @@ param_num = int()
 qbit_num = int()
 epoch = int()
 n = int()
-batch_size = int()
 weight_log_interval = int()
 df = pd.read_csv("datasets/train_weather.csv")
 data_list = {
@@ -29,12 +28,11 @@ data_list = {
 }
 
 def tweakable_parameters():
-    global param_num, qbit_num, epoch, n, batch_size, weight_log_interval
+    global param_num, qbit_num, epoch, n, weight_log_interval
     param_num = 30
     qbit_num = 6
-    epoch = 3  # Reduced from 100 for testing
+    epoch = 100  # Reduced from 100 for testing
     n = 7
-    batch_size = 1
     weight_log_interval = 10  # Log every epoch for visibility
 tweakable_parameters()
 
@@ -143,54 +141,29 @@ class QRNNModel(Module):
 
     def forward(self, X_t):
         log("Forward pass started")
-
-        batch_size, T = X_t.shape
-
-        # per-batch normalization (same as first code)
-        x_min = tensor.min(X_t, axis=1)
-        x_max = tensor.max(X_t, axis=1)
-
-        # reshape manually to keep dims
-        x_min = tensor.unsqueeze(x_min, axis=1)
-        x_max = tensor.unsqueeze(x_max, axis=1)
+        xin = X_t[0]
+        
+        x_min = tensor.min(xin)
+        x_max = tensor.max(xin)
+        xin = (xin - x_min) / (x_max - x_min)
 
         X_t = (X_t - x_min) / (x_max - x_min + 1e-8)
 
-        # one amplitude per batch element
-        Amplitude = [
-            QTensor(self.Amplitude.astype(np.float32))
-            for _ in range(batch_size)
-        ]
-
-        outputs = []
-
-        for t in range(T):
-            log(f"Time step {t+1}/{T}")
+        for t in range(X_t.shape[1]):
+            log(f"Time step {t+1}/{X_t.shape[1]}")
             step_outputs = []
+            x_step = QTensor(xin[t].to_numpy().astype(np.float32))
+            amp_tensor = QTensor(self.Amplitude.astype(np.float32))
+            inp = tensor.concatenate([amp_tensor, x_step], 0)
+            inp = tensor.unsqueeze(inp)
 
-            for b in range(batch_size):
-                x_step = QTensor(
-                    X_t[b, t].reshape([1]).to_numpy().astype(np.float32)
-                )
-
-                inp = tensor.concatenate([Amplitude[b], x_step], 0)
-                inp = tensor.unsqueeze(inp)
-
-                out = self.pqc(inp)
-                y = out[0][1]
-                step_outputs.append(y)
-
-                param = np.array(self.pqc.parameters())[0].reshape((-1,)).squeeze()
-
-                amp_new = Amplitude_Cacu(inp, param)
-
-                Amplitude[b] = QTensor(np.asarray(amp_new, dtype=np.float32))
-
-
-            outputs = step_outputs 
+            out = self.pqc(inp)[0][1]
+            step_outputs.append(y)
+            param = np.array(self.pqc.parameters())[0].reshape((-1,)).squeeze()
+            self.Amplitude = Amplitude_Cacu(inp, param)
 
         log("Forward pass completed")
-        return tensor.stack(outputs).reshape([batch_size, 1])
+        return tensor.unsqueeze(out,0)
 
 
 def train(data):
@@ -207,10 +180,11 @@ def train(data):
         QRNNModel.train()
         loss = 0
         count = 0
+        batch_size = 1
 
         for step, (data, true) in enumerate(get_minibatch_data(x_train, y_train, batch_size)):
             data = QTensor(data.astype(np.float32))
-            true = QTensor(true.astype(np.float32)).reshape([batch_size,1])
+            true = QTensor(true.astype(np.float32)).reshape([1,1])
 
             optimizer.zero_grad()
             output = QRNNModel(data)
@@ -219,7 +193,9 @@ def train(data):
             optimizer._step()
 
             loss += losss.item()
-            count += batch_size
+            count += 1
+            if step % 20 == 0:
+                log(f"Step {step}, Loss {losss.item():.6f}")
 
         log(f"Epoch {ep+1} completed. Avg Loss {loss/count:.6f}")
 
@@ -260,7 +236,7 @@ def train(data):
 #     log(f"Accuracy for {zhibiao}: {accuarcy:.4f}")
 #     return accuarcy
 
-def dump_predictions(params, zhibiao):
+def dump_predictions(zhibiao):
     log(f"Generating predictions for {zhibiao}")
 
     test_data = pd.read_csv("datasets/test_weather.csv")
@@ -285,9 +261,9 @@ def dump_predictions(params, zhibiao):
 
         predictions.append(Y_prediction)
 
-    os.makedirs("predictions", exist_ok=True)
+    os.makedirs("predictions1", exist_ok=True)
     safe_name = zhibiao.replace(" ", "_")
-    np.savetxt(f"predictions/{safe_name}_predictions.txt", predictions)
+    np.savetxt(f"predictions1/{safe_name}_predictions.txt", predictions)
     log(f"Predictions saved for {zhibiao}")
 
 
@@ -305,11 +281,12 @@ if __name__ == '__main__':
     for name, data in data_list.items():
         log(f"Training {name}")
         param = train(data)
-        dump_predictions(param, name)
+        dump_predictions(name)
         safe_name = name.replace(" ", "_")
-        np.savetxt(f"./best_params/{safe_name}.txt", param)
+        os.makedirs("best_params1", exist_ok=True)
+        np.savetxt(f"./best_params1/{safe_name}.txt", param)
         log(f"Parameters saved for {name}")
-        log(f"✓ {name} COMPLETE - files written to ./predictions/ and ./best_params/")
+        log(f"{name} COMPLETE - files written to ./predictions1/ and ./best_params1/")
 
     log(f"Total runtime: {time.time()-start:.2f} seconds")
     log("PROGRAM FINISHED - All models trained and files saved")

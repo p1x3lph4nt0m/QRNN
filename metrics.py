@@ -2,11 +2,7 @@ import math as m
 import pandas as pd
 import numpy as np
 
-def Accuracy_from_file_match_func1(zhibiao, raw_data, raw_predictions, n):
-    """
-    Reproduces the EXACT metric used inside Function 1
-    Assumes prediction file contains RAW forecasts (x_{t+1})
-    """
+def Accuracy(zhibiao, raw_data, raw_predictions, n):
 
     Data = raw_data
     test_iterations = len(Data) - n - 1
@@ -16,11 +12,9 @@ def Accuracy_from_file_match_func1(zhibiao, raw_data, raw_predictions, n):
 
         if j % 20 == 0:
             print(f"[{zhibiao}] Testing step {j}/{test_iterations}")
-
         X_t = np.array(Data[j:j+n+2]) 
-
         prev_value = X_t[n]            
-        Y_prediction = raw_predictions[j+n] 
+        Y_prediction = raw_predictions[j] 
 
         Ei = 0 if prev_value == 0 else m.fabs(prev_value - Y_prediction) / prev_value
         Ei_2_sum += Ei * Ei
@@ -34,7 +28,7 @@ def load_predictions_from_txt(filepath):
 
 if __name__ == '__main__':
 
-    n = 16  # must match model
+    n = 7  # must match model
 
     test_df = pd.read_csv("datasets/test_weather.csv")
 
@@ -60,7 +54,7 @@ if __name__ == '__main__':
 
         raw_values = test_df[col].values
 
-        acc = Accuracy_from_file_match_func1(
+        acc = Accuracy(
             zhibiao=col,
             raw_data=raw_values,
             raw_predictions=predictions,
