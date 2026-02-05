@@ -151,14 +151,12 @@ class QRNNModel(Module):
 
         for t in range(X_t.shape[1]):
             log(f"Time step {t+1}/{X_t.shape[1]}")
-            step_outputs = []
             x_step = QTensor(xin[t].to_numpy().astype(np.float32))
             amp_tensor = QTensor(self.Amplitude.astype(np.float32))
             inp = tensor.concatenate([amp_tensor, x_step], 0)
             inp = tensor.unsqueeze(inp)
 
             out = self.pqc(inp)[0][1]
-            step_outputs.append(y)
             param = np.array(self.pqc.parameters())[0].reshape((-1,)).squeeze()
             self.Amplitude = Amplitude_Cacu(inp, param)
 

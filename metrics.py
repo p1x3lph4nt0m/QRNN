@@ -33,11 +33,11 @@ if __name__ == '__main__':
     test_df = pd.read_csv("datasets/test_weather.csv")
 
     prediction_files = [
-        "./predictions1/Atmospheric_Pressure_predictions.txt",
-        "./predictions1/Minimum_Temperature_predictions.txt",
-        "./predictions1/Maximum_Temperature_predictions.txt",
-        "./predictions1/Relative_Humidity_predictions.txt",
-        "./predictions1/Wind_Speed_predictions.txt"
+        "./predictions/Atmospheric_Pressure_predictions.txt",
+        "./predictions/Minimum_Temperature_predictions.txt",
+        "./predictions/Maximum_Temperature_predictions.txt",
+        "./predictions/Relative_Humidity_predictions.txt",
+        "./predictions/Wind_Speed_predictions.txt"
     ]
 
     test_columns = test_df.columns.tolist()[1:]
