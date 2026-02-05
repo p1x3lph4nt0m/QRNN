@@ -219,7 +219,7 @@ if __name__ == '__main__':
     for name, data in data_list.items():
         log(f"Training {name}")
         param = train(data)
-        acc = Accuarcy(param, name, 16)
+        acc = Accuarcy(name, 16)
         print(f"{name} accuracy: {acc}")
         val[name] = acc
         safe_name = name.replace(" ", "_")

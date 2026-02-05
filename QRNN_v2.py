@@ -261,9 +261,9 @@ def dump_predictions(zhibiao):
 
         predictions.append(Y_prediction)
 
-    os.makedirs("predictions1", exist_ok=True)
+    os.makedirs("predictions", exist_ok=True)
     safe_name = zhibiao.replace(" ", "_")
-    np.savetxt(f"predictions1/{safe_name}_predictions.txt", predictions)
+    np.savetxt(f"predictions/{safe_name}_predictions.txt", predictions)
     log(f"Predictions saved for {zhibiao}")
 
 
@@ -283,10 +283,10 @@ if __name__ == '__main__':
         param = train(data)
         dump_predictions(name)
         safe_name = name.replace(" ", "_")
-        os.makedirs("best_params1", exist_ok=True)
-        np.savetxt(f"./best_params1/{safe_name}.txt", param)
+        os.makedirs("best_params", exist_ok=True)
+        np.savetxt(f"./best_params/{safe_name}.txt", param)
         log(f"Parameters saved for {name}")
-        log(f"{name} COMPLETE - files written to ./predictions1/ and ./best_params1/")
+        log(f"{name} COMPLETE - files written to ./predictions/ and ./best_params/")
 
     log(f"Total runtime: {time.time()-start:.2f} seconds")
     log("PROGRAM FINISHED - All models trained and files saved")
