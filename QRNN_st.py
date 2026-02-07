@@ -18,13 +18,13 @@ qbit_num = int()
 epoch = int()
 n = int()
 weight_log_interval = int()
-df = pd.read_csv("datasets/train_weather.csv")
+df = pd.read_csv("datasets/traindata_stock.csv")
 data_list = {
-    'Atmospheric Pressure': list(df.loc[:, 'Atmospheric Pressure']),
-    'Minimum Temperature': list(df.loc[:, 'Minimum Temperature']),
-    'Maximum Temperature': list(df.loc[:, 'Maximum Temperature']),
-    'Relative Humidity': list(df.loc[:, 'Relative Humidity']),
-    'Wind Speed': list(df.loc[:, 'Wind Speed'])
+    'Open': list(df.loc[:, 'Open']),
+    'High': list(df.loc[:, 'High']),
+    'Low': list(df.loc[:, 'Low']),
+    'Close': list(df.loc[:, 'Close']),
+    'Volume': list(df.loc[:, 'Volume'])
 }
 
 def smooth_series(x, k=3):
@@ -244,7 +244,7 @@ def train(data):
 def dump_predictions(zhibiao):
     log(f"Generating predictions for {zhibiao}")
 
-    test_data = pd.read_csv("datasets/test_weather.csv")
+    test_data = pd.read_csv("datasets/testdata_stock.csv")
     Data = list(test_data.loc[:, zhibiao])
     Data = list(test_data.loc[:, zhibiao])
 
